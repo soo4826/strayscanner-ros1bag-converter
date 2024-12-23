@@ -6,12 +6,13 @@ import rclpy
 from rclpy.node import Node
 import csv
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Imu, Image, CameraInfo
+from sensor_msgs.msg import Imu, Image
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
 import numpy as np
 import time
+from std_msgs.msg import Header
 
 
 def adjust_rgb_and_camera_matrix(rgb_image, depth_image, camera_matrix):
@@ -27,7 +28,7 @@ def adjust_rgb_and_camera_matrix(rgb_image, depth_image, camera_matrix):
         resized_rgb (numpy.ndarray): Resized RGB image.
         adjusted_camera_matrix (numpy.ndarray): Adjusted camera intrinsic matrix.
     """
-    
+
     depth_h, depth_w = depth_image.shape[:2]
     rgb_h, rgb_w = rgb_image.shape[:2]
 
@@ -49,12 +50,13 @@ def adjust_rgb_and_camera_matrix(rgb_image, depth_image, camera_matrix):
 
     return resized_rgb, adjusted_camera_matrix
 
-def create_pointcloud2(points):
+
+def create_pointcloud2(points_with_rgb):
     """
     Create a PointCloud2 message from 3D points with RGB.
 
     Args:
-        points (numpy.ndarray): Nx6 array of 3D points with RGB (x, y, z, r, g, b).
+        points_with_rgb (numpy.ndarray): Nx6 array of 3D points with RGB (x, y, z, r, g, b).
 
     Returns:
         pointcloud_msg (PointCloud2): ROS 2 PointCloud2 message.
@@ -69,27 +71,27 @@ def create_pointcloud2(points):
         PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
         PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
         PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
-        PointField(name="r", offset=12, datatype=PointField.UINT8, count=1),
-        PointField(name="g", offset=13, datatype=PointField.UINT8, count=1),
-        PointField(name="b", offset=14, datatype=PointField.UINT8, count=1),
+        PointField(name="rgb", offset=12, datatype=PointField.UINT32, count=1),
     ]
     pointcloud_msg.fields = fields
 
     # Calculate point step and row step
     pointcloud_msg.point_step = 16  # 4 bytes (float32) * 3 + 4 bytes (uint32)
-    pointcloud_msg.row_step = pointcloud_msg.point_step * len(points)
+    pointcloud_msg.row_step = pointcloud_msg.point_step * len(points_with_rgb)
 
     # Convert points to byte data
     buffer = []
-    for point in points:
+    for point in points_with_rgb:
         x, y, z, r, g, b = point
-        rgb = struct.unpack("I", struct.pack("BBBB", int(b), int(g), int(r), 0))[0]
+        # Ensure RGB values are in 0-255 range and convert to uint32
+        r, g, b = int(r), int(g), int(b)
+        rgb = struct.unpack("I", struct.pack("BBBB", b, g, r, 0))[0]
         buffer.append(struct.pack("fffI", x, y, z, rgb))
 
     pointcloud_msg.data = b"".join(buffer)
     pointcloud_msg.is_bigendian = False
     pointcloud_msg.height = 1
-    pointcloud_msg.width = len(points)
+    pointcloud_msg.width = len(points_with_rgb)
     pointcloud_msg.is_dense = True
 
     return pointcloud_msg
@@ -176,17 +178,16 @@ def combine_and_sort_data(imu_data, odometry_data, rgb_data, depth_data):
     return combined_data
 
 
-class CSVAndVideoPublisher(Node):
+class StrayScannerDataPublisher(Node):
     def __init__(self, data_dir):
         super().__init__("csv_and_video_publisher")
 
         # Publishers
-        self.imu_pub = self.create_publisher(Imu, "/imu", 10)
-        self.odometry_pub = self.create_publisher(Odometry, "/odometry", 10)
-        self.rgb_pub = self.create_publisher(Image, "/camera/rgb", 10)
-        self.depth_pub = self.create_publisher(Image, "/camera/depth", 10)
-        self.pointcloud_pub = self.create_publisher(PointCloud2, 'pointcloud', 10)
-        self.camera_info_pub = self.create_publisher(CameraInfo, "/camera_info", 10)
+        self.imu_pub = self.create_publisher(Imu, "/imu", 100)
+        self.odometry_pub = self.create_publisher(Odometry, "/odometry", 100)
+        self.rgb_pub = self.create_publisher(Image, "/camera/rgb", 100)
+        self.depth_pub = self.create_publisher(Image, "/camera/depth", 100)
+        self.pointcloud_pub = self.create_publisher(PointCloud2, "/pointcloud", 100)
 
         # Load CSV data
         imu_data = read_csv(f"{data_dir}/imu.csv")[1:]  # Skip header
@@ -201,8 +202,10 @@ class CSVAndVideoPublisher(Node):
         self.depth_dir = os.path.join(data_dir, "depth")
         depth_data = self.prepare_image_data(self.depth_dir, odometry_data)
 
-        # Prepare intrinsic matrix 
-        self.rgb_intrinsic_matrix = np.array(read_csv(f"{data_dir}/camera_matrix.csv"), dtype=float)
+        # Prepare intrinsic matrix
+        self.rgb_intrinsic_matrix = np.array(
+            read_csv(f"{data_dir}/camera_matrix.csv"), dtype=float
+        )
 
         # Combine and sort all data
         self.sorted_data = combine_and_sort_data(
@@ -285,9 +288,10 @@ class CSVAndVideoPublisher(Node):
 
             elif entry["type"] == "rgb":
                 image_info = entry["data"]
-                rgb_img = cv2.imread(image_info["path"])
+                bgr_img = cv2.imread(image_info["path"])
+                rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
                 if rgb_img is not None:
-                    img_msg = self.bridge.cv2_to_imgmsg(rgb_img, encoding="bgr8")
+                    img_msg = self.bridge.cv2_to_imgmsg(bgr_img, encoding="bgr8")
                     img_msg.header.stamp.sec = int(timestamp)
                     img_msg.header.stamp.nanosec = int(
                         (timestamp - int(timestamp)) * 1e9
@@ -299,7 +303,7 @@ class CSVAndVideoPublisher(Node):
                 image_info = entry["data"]
                 depth_img = cv2.imread(image_info["path"], cv2.IMREAD_UNCHANGED)
                 if depth_img is not None and depth_img.dtype == np.uint16:
-                    # pub depth image 
+                    # pub depth image
                     depth_msg = self.bridge.cv2_to_imgmsg(depth_img, encoding="mono16")
                     depth_msg.header.stamp.sec = int(timestamp)
                     depth_msg.header.stamp.nanosec = int(
@@ -312,15 +316,16 @@ class CSVAndVideoPublisher(Node):
                     resized_rgb, adjusted_camera_matrix = adjust_rgb_and_camera_matrix(
                         rgb_img, depth_img, self.rgb_intrinsic_matrix
                     )
-                    points = unproject_depth(depth_img, resized_rgb, adjusted_camera_matrix)
-                    print(points.shape)
+                    points = unproject_depth(
+                        depth_img, resized_rgb, adjusted_camera_matrix
+                    )
 
                     # Convert points to PointCloud2 message
                     pointcloud_msg = create_pointcloud2(points)
-                    pointcloud_msg.header.stamp = depth_msg.header.stamp  # Sync with depth image
+                    pointcloud_msg.header.stamp = (
+                        depth_msg.header.stamp
+                    )  # Sync with depth image
                     self.pointcloud_pub.publish(pointcloud_msg)
-
-
 
             self.current_index += 1
 
@@ -329,12 +334,12 @@ def main(args=None):
     rclpy.init(args=args)
 
     if len(sys.argv) < 2:
-        print("Usage: python3 pub_combined_data.py <data_directory>")
+        print("Usage: python3 publish_ros2_msgs.py <data_directory>")
         rclpy.shutdown()
         return
 
     data_dir = sys.argv[1]
-    node = CSVAndVideoPublisher(data_dir)
+    node = StrayScannerDataPublisher(data_dir)
     rclpy.spin(node)
 
     node.destroy_node()
