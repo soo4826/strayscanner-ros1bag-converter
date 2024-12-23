@@ -1,11 +1,27 @@
-import sys 
+import sys
+import os
+import cv2
 import rclpy
 from rclpy.node import Node
 import csv
-from sensor_msgs.msg import Imu, CameraInfo
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Imu, Image, CameraInfo
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
 import time
+
+
+def extract_frames(video_path, output_dir):
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        output_path = os.path.join(output_dir, f"{frame_count:06d}.jpg")
+        cv2.imwrite(output_path, frame)
+        frame_count += 1
+    cap.release()
 
 
 def read_csv(file_path):
@@ -15,7 +31,7 @@ def read_csv(file_path):
     return data
 
 
-def combine_and_sort_data(imu_data, odometry_data):
+def combine_and_sort_data(imu_data, odometry_data, image_data):
     combined_data = []
 
     # Combine IMU data
@@ -24,46 +40,55 @@ def combine_and_sort_data(imu_data, odometry_data):
 
     # Combine Odometry data
     for row in odometry_data[1:]:  # Skip header
-        combined_data.append(
-            {"timestamp": float(row[0]), "type": "odometry", "data": row}
-        )
+        combined_data.append({"timestamp": float(row[0]), "type": "odometry", "data": row})
+
+    # Combine Image data
+    for image_info in image_data:
+        combined_data.append({"timestamp": image_info["timestamp"], "type": "image", "data": image_info})
 
     # Sort by timestamp
     combined_data.sort(key=lambda x: x["timestamp"])
     return combined_data
 
 
-class CSVToROS2(Node):
+class CSVAndVideoPublisher(Node):
     def __init__(self, data_dir):
-        super().__init__("csv_to_ros2")
+        super().__init__("csv_and_video_publisher")
 
         # Publishers
         self.imu_pub = self.create_publisher(Imu, "/imu", 10)
         self.odometry_pub = self.create_publisher(Odometry, "/odometry", 10)
+        self.image_pub = self.create_publisher(Image, "/camera/image", 10)
         self.camera_info_pub = self.create_publisher(CameraInfo, "/camera_info", 10)
 
         # Load CSV data
         imu_data = read_csv(f"{data_dir}/imu.csv")[1:]  # Skip header
         odometry_data = read_csv(f"{data_dir}/odometry.csv")[1:]  # Skip header
-        self.camera_matrix = read_csv(f"{data_dir}/camera_matrix.csv")
 
-        # Combine and sort data
-        self.sorted_data = combine_and_sort_data(imu_data, odometry_data)
+        # Extract video frames if necessary
+        self.image_dir = os.path.join(data_dir, "images")
+        if not os.path.exists(self.image_dir):
+            os.makedirs(self.image_dir)
+            extract_frames(os.path.join(data_dir, "rgb.mp4"), self.image_dir)
+
+        # Prepare Image data with timestamps from odometry.csv
+        image_data = []
+        for row in odometry_data:
+            frame_id = int(row[1])
+            timestamp = float(row[0])
+            image_path = os.path.join(self.image_dir, f"{frame_id:06d}.jpg")
+            if os.path.exists(image_path):
+                image_data.append({"timestamp": timestamp, "path": image_path})
+
+        # Combine and sort all data
+        self.sorted_data = combine_and_sort_data(imu_data, odometry_data, image_data)
         self.current_index = 0
+        self.bridge = CvBridge()
 
-        # Set Camera Info
-        self.camera_info_msg = CameraInfo()
-        self.camera_info_msg.k = [float(x) for row in self.camera_matrix for x in row]
-
-        # Publish camera info once at the start
-        self.camera_info_pub.publish(self.camera_info_msg)
-
-        # Start publishing sorted data
+        # Start publishing
         self.start_time = time.time()
         self.initial_timestamp = self.sorted_data[0]["timestamp"]
-        self.timer = self.create_timer(
-            0.001, self.publish_data
-        )  # High frequency, controlled inside
+        self.timer = self.create_timer(0.0005, self.publish_data)  # High frequency timer
 
     def publish_data(self):
         if self.current_index >= len(self.sorted_data):
@@ -76,11 +101,7 @@ class CSVToROS2(Node):
 
         while (
             self.current_index < len(self.sorted_data)
-            and (
-                self.sorted_data[self.current_index]["timestamp"]
-                - self.initial_timestamp
-            )
-            <= elapsed_time
+            and self.sorted_data[self.current_index]["timestamp"] - self.initial_timestamp <= elapsed_time
         ):
             entry = self.sorted_data[self.current_index]
             timestamp = entry["timestamp"]
@@ -90,7 +111,7 @@ class CSVToROS2(Node):
                 imu_msg = Imu()
                 imu_msg.header.stamp.sec = int(timestamp)
                 imu_msg.header.stamp.nanosec = int((timestamp - int(timestamp)) * 1e9)
-                imu_msg.header.frame_id = "imu_frame"  # frame_id 추가
+                imu_msg.header.frame_id = "imu_frame"
                 imu_msg.linear_acceleration.x = float(imu_row[1])
                 imu_msg.linear_acceleration.y = float(imu_row[2])
                 imu_msg.linear_acceleration.z = float(imu_row[3])
@@ -104,8 +125,8 @@ class CSVToROS2(Node):
                 odom_msg = Odometry()
                 odom_msg.header.stamp.sec = int(timestamp)
                 odom_msg.header.stamp.nanosec = int((timestamp - int(timestamp)) * 1e9)
-                odom_msg.header.frame_id = "odom_frame"  # frame_id 추가
-                odom_msg.child_frame_id = "base_link"  # child_frame_id 추가
+                odom_msg.header.frame_id = "odom_frame"
+                odom_msg.child_frame_id = "base_link"
                 odom_msg.pose.pose.position.x = float(odom_row[2])
                 odom_msg.pose.pose.position.y = float(odom_row[3])
                 odom_msg.pose.pose.position.z = float(odom_row[4])
@@ -117,30 +138,31 @@ class CSVToROS2(Node):
                 )
                 self.odometry_pub.publish(odom_msg)
 
+            elif entry["type"] == "image":
+                image_info = entry["data"]
+                img = cv2.imread(image_info["path"])
+                if img is not None:
+                    img_msg = self.bridge.cv2_to_imgmsg(img, encoding="bgr8")
+                    img_msg.header.stamp.sec = int(timestamp)
+                    img_msg.header.stamp.nanosec = int((timestamp - int(timestamp)) * 1e9)
+                    img_msg.header.frame_id = "camera_frame"
+                    self.image_pub.publish(img_msg)
+
             self.current_index += 1
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    # 명령줄 인자로 경로를 받음
     if len(sys.argv) < 2:
-        print("Usage: python3 pub_imu_and_odometry.py <data_directory>")
-        print(
-            "Example: python3 pub_imu_and_odometry.py /ws/sample-data/8653a2142b/8653a2142b/"
-        )
+        print("Usage: python3 pub_combined_data.py <data_directory>")
         rclpy.shutdown()
         return
 
-    # 경로 설정
     data_dir = sys.argv[1]
-    print(f"Using data directory: {data_dir}")
-
-    # CSVToROS2 노드 생성 및 실행
-    node = CSVToROS2(data_dir)
+    node = CSVAndVideoPublisher(data_dir)
     rclpy.spin(node)
 
-    # 종료 처리
     node.destroy_node()
     rclpy.shutdown()
 
