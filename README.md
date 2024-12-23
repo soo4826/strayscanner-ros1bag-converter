@@ -13,6 +13,17 @@
             /pointcloud : sensor_msgs/msg/PointCloud2
             /odometry : nav_msgs/msg/Odometry
 
-## Ack 
+## How to use with sample data 
+- A tutorial 
+    - unzip the sample_data/8653a2142b
+    - recommned to use docker 
+        - e.g., docker pull 
+    - `cd docker/run` and run `./docker_run_ros.sh`
+    - then, `python3 publish_ros2_msgs.py /ws/sample_data/8653a2142b/8653a2142b/`
+- You can check the results using rviz2, the example is: 
+    ![example](docs/rviz2_example.png)
+    
+
+## Acknowledgement 
 - Big thanks to the Stray Robots Team
     - [https://github.com/strayrobots/scanner](https://github.com/strayrobots/scanner)
