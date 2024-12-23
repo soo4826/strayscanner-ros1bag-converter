@@ -1,3 +1,4 @@
+import sys 
 import rclpy
 from rclpy.node import Node
 import csv
@@ -119,10 +120,24 @@ class CSVToROS2(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    data_dir = "/ws/sample-data/8653a2142b/8653a2142b/"
-    node = CSVToROS2(data_dir)
+    # 명령줄 인자로 경로를 받음
+    if len(sys.argv) < 2:
+        print("Usage: python3 pub_imu_and_odometry.py <data_directory>")
+        print(
+            "Example: python3 pub_imu_and_odometry.py /ws/sample-data/8653a2142b/8653a2142b/"
+        )
+        rclpy.shutdown()
+        return
 
+    # 경로 설정
+    data_dir = sys.argv[1]
+    print(f"Using data directory: {data_dir}")
+
+    # CSVToROS2 노드 생성 및 실행
+    node = CSVToROS2(data_dir)
     rclpy.spin(node)
+
+    # 종료 처리
     node.destroy_node()
     rclpy.shutdown()
 
