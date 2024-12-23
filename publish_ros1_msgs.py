@@ -326,7 +326,7 @@ class StrayScannerDataPublisher:
         if self.current_index >= len(self.sorted_data):
             self.progress_bar.close()
             rospy.loginfo("All data published; Shutting down and removing transforms.")
-            rospy.signal_shutdown()
+            rospy.signal_shutdown("Shutting down")
             self.tf_broadcaster.sendTransform((0, 0, 0), (0, 0, 0, 1), rospy.Time.now(), "base_link", "odom_frame")
             return
 
