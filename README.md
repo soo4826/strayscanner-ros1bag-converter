@@ -28,7 +28,7 @@
         - Install [ros-noetic-desktop](https://wiki.ros.org/noetic/Installation/Ubuntu) (for rviz) 
     - run ros core & node
         - `roscore`
-        - `python3 publish_ros1_msgs.py ws/sample_data/8653a2142b/`
+        - `python3 publish_ros1_msgs.py /ws/sample_data/8653a2142b/`
 - You can check the results 
     - using rviz, the example is: 
         - ![example1](docs/rviz1_example.png)
