@@ -3,6 +3,9 @@
 ## What is this?
 - If you have iPhone Pro (>12) or iPad Pro (>2020), 
 - You can easily turn into your iPhone data into ros2 topics.
+- First, you should use this app and get data as file: 
+    - [https://github.com/strayrobots/scanner](https://github.com/strayrobots/scanner)
+- and follow the below <how to use ... > section, then you can get these types of data:
     - supported data and their types:
 
             Topic List with Types:
