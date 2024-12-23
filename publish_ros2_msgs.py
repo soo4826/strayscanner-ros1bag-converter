@@ -13,6 +13,7 @@ from geometry_msgs.msg import Quaternion
 import numpy as np
 import time
 from std_msgs.msg import Header
+from tqdm import tqdm 
 
 
 def adjust_rgb_and_camera_matrix(rgb_image, depth_image, camera_matrix):
@@ -214,6 +215,9 @@ class StrayScannerDataPublisher(Node):
         self.current_index = 0
         self.bridge = CvBridge()
 
+        # Initialize progress bar
+        self.progress_bar = tqdm(total=len(self.sorted_data), desc="Publishing data")
+
         # Start publishing
         self.start_time = time.time()
         self.initial_timestamp = self.sorted_data[0]["timestamp"]
@@ -237,7 +241,9 @@ class StrayScannerDataPublisher(Node):
         return image_data
 
     def publish_data(self):
+
         if self.current_index >= len(self.sorted_data):
+            self.progress_bar.close()  # Close progress bar
             self.get_logger().info("All data published.")
             self.destroy_timer(self.timer)
             return
@@ -326,6 +332,9 @@ class StrayScannerDataPublisher(Node):
                         depth_msg.header.stamp
                     )  # Sync with depth image
                     self.pointcloud_pub.publish(pointcloud_msg)
+
+            # Update progress bar
+            self.progress_bar.update(1)
 
             self.current_index += 1
 

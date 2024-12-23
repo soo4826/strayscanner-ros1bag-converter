@@ -1,13 +1,13 @@
-# 작업 디렉토리 설정
+# Set working directory
 WORKDIR="$(pwd)/../../"
 
-# Docker 이미지 설정
+# Set Docker image
 IMAGE="ros:rolling-ros-core"
 
-# 컨테이너 이름 설정
+# Set container name
 CONTAINER_NAME="ros-container"
 
-# Docker 컨테이너 실행 (GPU 지원 및 이름 지정)
+# Run Docker container (with GPU support and custom name)
 xhost +local:root
 docker run --rm -it \
     --gpus all \
