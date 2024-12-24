@@ -323,6 +323,10 @@ class StrayScannerDataPublisher:
         """
         Timer callback to publish data at appropriate timestamps.
         """
+        if not hasattr(self, 'tf_broadcaster'):
+            rospy.logwarn("tf_broadcaster is missing. Reinitializing...")
+            self.tf_broadcaster = tf.TransformBroadcaster()
+
         if self.current_index >= len(self.sorted_data):
             self.progress_bar.close()
             rospy.loginfo("All data published; Shutting down and removing transforms.")
