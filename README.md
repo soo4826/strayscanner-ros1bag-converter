@@ -36,7 +36,7 @@
         - ![example2](docs/topic_echo.png)
 
 ## Additional Feature
-- The script automatically checks for the existence of the `<data_dir>images/` directory and parses the `rgb.mp4` file with HEVC codec to generate image files.
+- The script automatically checks for the existence of the `<data_dir>/images/` directory and parses the `rgb.mp4` file with HEVC codec to generate image files.
 
 ## Acknowledgement 
 - Big thanks to the Stray Robots Team
