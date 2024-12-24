@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3-rosinstall \
     python3-vcstools \
     python3-pip \
+    zip \
     && rm -rf /var/lib/apt/lists/*
 
 # install python package
