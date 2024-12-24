@@ -20,7 +20,7 @@
 ## How to use with sample data 
 - A tutorial 
     - unzip the sample_data/8653a2142b
-        - `unzip sample_data/8653a2142b.zip sample_data/`
+        - `unzip sample_data/8653a2142b.zip -d sample_data/`
     
     - a) using docker (recommended)
         - `docker build docker/ -t ros1-noetic` and run `./docker/run_docker.sh`
