@@ -20,6 +20,7 @@ RUN rosdep init && \
 # install ros desktop
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-noetic-desktop \
+    ros-noetic-image-transport-plugins \
     && rm -rf /var/lib/apt/lists/*
 
 

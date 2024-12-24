@@ -13,7 +13,7 @@
             ---------------------------------------
             /imu : sensor_msgs/msg/Imu
             /camera/depth : sensor_msgs/msg/Image
-            /camera/rgb : sensor_msgs/msg/Image
+            /camera/rgb : sensor_msgs/msg/CompressedImage
             /pointcloud : sensor_msgs/PointCloud2
             /odometry : nav_msgs/Odometry
 
@@ -21,14 +21,17 @@
 - A tutorial 
     - unzip the sample_data/8653a2142b
         - `unzip sample_data/8653a2142b.zip -d sample_data/`
-    
-    - a) using docker (recommended)
-        - `docker build docker/ -t ros1-noetic` and run `./docker/run_docker.sh`
-    - b) using native ros1 noetic
-        - Install [ros-noetic-desktop](https://wiki.ros.org/noetic/Installation/Ubuntu) (for rviz) 
-    - run ros core & node
-        - `roscore`
-        - `python3 publish_ros1_msgs.py /ws/sample_data/8653a2142b/`
+    - Environment setup
+        - a) using docker (recommended)
+            - `docker build docker/ -t ros1-noetic` and run `./docker/run_docker.sh`
+        - b) using native ros1 noetic
+            - Install [ros-noetic-desktop](https://wiki.ros.org/noetic/Installation/Ubuntu) (for rviz) 
+    - Convert ROS Data
+        - a) publish data through ros topics
+            - `roscore`
+            - `python3 publish_ros1_msgs.py sample_data/8653a2142b/`
+        - b) convert data into ros bag
+            - `python3 convert_ros1_msgs.py sample_data/8653a2142b/`
 - You can check the results 
     - using rviz, the example is: 
         - ![example1](docs/rviz1_example.png)

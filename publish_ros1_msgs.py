@@ -8,7 +8,7 @@ import rospy
 import csv
 import tf
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Imu, Image
+from sensor_msgs.msg import Imu, Image, CompressedImage
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
@@ -218,7 +218,7 @@ class StrayScannerDataPublisher:
         # Initialize publishers
         self.imu_pub = rospy.Publisher("/imu", Imu, queue_size=100)
         self.odometry_pub = rospy.Publisher("/odometry", Odometry, queue_size=100)
-        self.rgb_pub = rospy.Publisher("/camera/rgb", Image, queue_size=100)
+        self.rgb_pub = rospy.Publisher("/camera/rgb/compressed", CompressedImage, queue_size=100)
         self.depth_pub = rospy.Publisher("/camera/depth", Image, queue_size=100)
         self.pointcloud_pub = rospy.Publisher("/pointcloud", PointCloud2, queue_size=100)
 
@@ -394,7 +394,7 @@ class StrayScannerDataPublisher:
                 bgr_img = cv2.imread(image_info["path"])
                 if bgr_img is not None:
                     rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-                    img_msg = self.bridge.cv2_to_imgmsg(bgr_img, encoding="bgr8")
+                    img_msg = self.bridge.cv2_to_compressed_imgmsg(bgr_img)
                     img_msg.header.stamp = ros_time
                     img_msg.header.frame_id = "camera_rgb_frame"
                     self.rgb_pub.publish(img_msg)
