@@ -31,7 +31,7 @@
             - `roscore`
             - `python3 publish_ros1_msgs.py sample_data/8653a2142b/`
         - b) convert data into ros bag
-            - `python3 convert_ros1_msgs.py sample_data/8653a2142b/`
+            - `python3 convert_ros1_bag.py sample_data/8653a2142b/`
 - You can check the results 
     - using rviz, the example is: 
         - ![example1](docs/rviz1_example.png)
